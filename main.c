@@ -1,9 +1,8 @@
 //#define NU32_STANDALONE  // uncomment if program is standalone, not bootloaded
 #include "NU32.h"          // config bits, constants, funcs for startup and UART
-#include "NU32_I2C1.h"
-// #include "i2c.h"
+#include "i2c_master_noint.h"
 
-#define FULL_DUTY 3000 //About 10 MHz
+#define FULL_DUTY 6  //6//About 10 MHz
 
 #define WRST 0b1000000000	// PORTEbits.RE9
 #define WR   0b100000000 	// PORTEbits.RE8
@@ -14,8 +13,8 @@
 #define HREF PORTBbits.RB10
 #define RCK PORTBbits.RB9 
 
-//SIOC - A14 (SCL1) 
-//SIOD - A15 (SDA1) 
+//SIOC - A2 (SCL2) or A14 (SCL1) 
+//SIOD - A3 (SDA2) or A15 (SDA1) 
 //VSYNC - F5 (CN18)
 
 /******************************************************************************
@@ -24,6 +23,8 @@
 void data_config();
 void camera_config();
 void delay();
+void camera_reset();
+void i2c_com(int reg_address, int default_value, int change_value);
 
 void VSyncInterruptInitialize();
 void reset_write_pointer();
@@ -49,14 +50,15 @@ void wheel_one();
 *****************************************************************************/
 char newF;
 int count = 0;
+int count2 = 0;
 int read_state = 0;
 
-int num_rows = 144;
-int num_columns = 174;
-volatile unsigned char img_array[144][174];
+int num_rows = 400;
+int num_columns = 300;
+volatile unsigned char img_array[400][300];
+// volatile unsigned char num_array[176][144];
 
 volatile unsigned char c;
-
 
 
 /**********************************************************************
@@ -65,30 +67,36 @@ volatile unsigned char c;
 void __ISR(_CHANGE_NOTICE_VECTOR, IPL3SOFT) VSyncInterrupt(void) { // INT step 1
 	newF = PORTF; // since pins on port F are being monitored by CN,
 				  // must read both to allow continued functioning
-
+	// NU32_WriteUART1("Vsync \r\n");
 	read_state = !read_state; //first VSync is beginning of frame 
 								// and second Vsync is end of frame
 
-	if(read_state){
+	if(count > 3 && read_state){
 		reset_write_pointer();
 		FIFO_write_enable();
+		// NU32_WriteUART1("Write enable \r\n");
 	}
 
-	if(!read_state){
+	if(count > 3 && !read_state){
 		FIFO_write_disable();
+		// NU32_WriteUART1("Write disable \r\n");
 	}
 	
 	/*****/ 
 	//Currently used to turn off CN pin after one full cycle
 	count++;
-	if(count ==2){
-		// CNCONbits.ON = 0; // Temporarily turn CN pin off
-		// NU32_WriteUART1("image stored \r\n");
+	if(count == 5){
 		read_image();
-		display_image();
+		// NU32_WriteUART1("image read \r\n");
+		char data2[5];
+		sprintf(data2, "%d \r\n",1);
+    	NU32_WriteUART1(data2);
+		// display_image();
 	}
 
-	if(count >= 3){} //do nothing
+	if(count >= 6){
+		CNCONbits.ON = 0; // Temporarily turn CN pin off
+	} 
 	/*****/
 
 	IFS1bits.CNIF = 0; // clear the interrupt flag
@@ -104,67 +112,107 @@ int main(){
 	char value2;
 	char msg2[20];
 
+	int rows2 = 0; 
+	int cols2 = 0;
+
 	unsigned char buffer;
 	unsigned char data[100];
+
+	data_config();
 
 	NU32_Startup();
 
 	__builtin_disable_interrupts();
-
-	// I2Cinitialize(9600); //SCL1 and SDA1
-	I2Cinitialize(SLOW_BAUD_RATE); //SCL1 and SDA1
+	camera_reset();
+	rckInitialize();
+	i2c_master_setup(); //SCL2 and SDA2
 	camera_config();
 	VSyncInterruptInitialize();
-	rckInitialize();
-	data_config();
+
+	
 
 	wheel_one();
 
 	__builtin_enable_interrupts();
 
 	
-
-
 	while(1){
-		NU32_WriteUART1("Press 'l' to read a byte \r\n");
-		NU32_WriteUART1("Press 'k' to reset \r\n");
-		NU32_WriteUART1("Press 'p' to read i2c \r\n");
-		NU32_ReadUART1(msg2, 5);             // get the response
+		// NU32_WriteUART1("Press 'l' to read a byte \r\n");
+		NU32_ReadUART1(msg2, 20);             // get the response
 
 		switch(msg2[0]){
     		case 'l':
     		{
     			buffer = read_byte();
-    			sprintf(data, "%d",buffer);
+    			sprintf(data, "%d \r\n",buffer);
     			NU32_WriteUART1(data);
     			break;
     		}
     		case 'k':
     		{
+    			//clear the img_array before storing a new image
+    			rows2 = 0;
+    			cols2 = 0;
+    			while(rows2 <= num_rows){
+    				while(cols2 <= num_columns){
+    					img_array[rows2][cols2] = 0;
+    					cols2++;
+    				}
+					cols2 = 0;
+					rows2 ++;
+				}
+
     			count = 0;
     			read_state = 0;
-				VSyncInterruptInitialize(); 
+    			CNCONbits.ON = 1; // Turn CN pin back on
+
+
     			break;
     		}
     		case 'p':
     		{
-    			delay();
-    			// delay();
-    			// delay();
-    			I2Cread(0x42, 0xc, value);
-    			sprintf(data, "%d", value);
-    			NU32_WriteUART1(data);
-    			break;
-    		}
-    		case 'o':
-    		{
-    			read_image();
     			display_image();
     			break;
     		}
-    		case 'r':
-    		{
 
+    		case 'o':
+    		{
+    			//Test pattern on
+				i2c_master_start();
+				i2c_master_send(0x42);
+				i2c_master_send(0x70);
+				i2c_master_send(0x4a | 0b11000000);
+				i2c_master_stop();
+				delay();
+				i2c_master_start();
+				i2c_master_send(0x42);
+				i2c_master_send(0x71);
+				i2c_master_send(0x35 | 0b11000000);
+				i2c_master_stop();
+				delay();
+
+				sprintf(data, "%d \r\n",2);
+    			NU32_WriteUART1(data);
+    			break;
+    		}
+    		case 'i':
+    		{
+    			//Test pattern off
+				i2c_master_start();
+				i2c_master_send(0x42);
+				i2c_master_send(0x70);
+				i2c_master_send(0x4a);
+				i2c_master_stop();
+				delay();
+				i2c_master_start();
+				i2c_master_send(0x42);
+				i2c_master_send(0x71);
+				i2c_master_send(0x35);
+				i2c_master_stop();
+				delay();
+				sprintf(data, "%d \r\n",3);
+    			NU32_WriteUART1(data);
+    			break;
     		}
     	}
 	}
@@ -180,16 +228,23 @@ void data_config() {
 	DDPCONbits.JTAGEN = 0; // Disable JTAG, make pins 4 and 5 of Port A available.
 	TRISB = 0xFFFF; //set all Port B pins to inputs
 	AD1PCFG = 0xFFFF; //set all Port B pins to digital 
-	TRISDbits.TRISD3 = 0; //0 = output
-	LATDbits.LATD3 = 0;	  //0 sets output to low
 	TRISEbits.TRISE9 = 0; //0 = output
 	TRISEbits.TRISE8 = 0;
 	TRISFbits.TRISF0 = 0; //0 = output
 	TRISFbits.TRISF1 = 0;
 	LATESET = 0b110000000; //set pins 8 and 9 high
 	LATFSET = 0b11; //set pin 0 and 1 high
-	// LATFCLR = 0b10; //set pin 1 low
-	// LATEbits.LATE3 = 1;   //1 sets output to floating
+	TRISAbits.TRISA1 = 0;
+}
+
+//Function to reset the camera
+void camera_reset(){
+	LATAbits.LATA1 = 0;
+	delay();
+	delay();
+	delay();
+	LATAbits.LATA1 = 1;
+	// NU32_WriteUART1("Camera reset");
 }
 
 void camera_config(){
@@ -197,57 +252,82 @@ void camera_config(){
 	for(i=1;i<10000;i++){}
 	//configure the register that slows down pclk period to xclk*32
 
-	// I2Cwrite(0x42, 0x11, 0b10000011); //pclk is 32 times xclk period
+	//configure the register that slows down pclk period to xclk*32
+	// delay();
+	// i2c_master_start();
+	// i2c_master_send(0x42);
+	// i2c_master_send(0x11);
+	// i2c_master_send(0b10000011);// pclk is 32 times xclk period
+	// i2c_master_stop();
+	// delay();
 
+	//Enable scaling (COM3)
+	// i2c_com(0x0c, 0x00, 0b00001000); 
+	// i2c_master_start();
+	// i2c_master_send(0x42);
+	// i2c_master_send(0x0c); //Address for COM3
+	// i2c_master_send(0x00 | 0b00001000); //Default and bit 3 is scale enable
+	// i2c_master_stop();
+	// delay();
 
+	//Selecting QCIF format (COM7)
+	// i2c_com(0x12, 0x00, 0b00001000);
+	// i2c_master_start();
+	// i2c_master_send(0x42);
+	// i2c_master_send(0x12); //Address for COM7
+	// i2c_master_send(0x00 | 0b00001000);
+	// i2c_master_stop();
+	// delay();
+		//Selecting QCIF format (COM14)
+	// i2c_com(0x3e, 0x0e, 0b00001000);
+
+	// //Test pattern
+	i2c_master_start();
+	i2c_master_send(0x42);
+	i2c_master_send(0x70);
+	i2c_master_send(0x4a | 0b10000000);
+	i2c_master_stop();
 	delay();
-	I2Cstartevent();
-	delay();
-	I2Csendonebyte(0x42);
-	I2Csendonebyte(0x11);
-	I2Csendonebyte(0b10000011);// pclk is 32 times xclk period
-	I2Cstopevent();
+	i2c_master_start();
+	i2c_master_send(0x42);
+	i2c_master_send(0x71);
+	i2c_master_send(0x35 | 0b10000000);
+	i2c_master_stop();
 	delay();
 
-	//Enable scaling
-	I2Cstartevent();
-	I2Csendonebyte(0x42);
-	I2Csendonebyte(0x0c);
-	I2Csendonebyte(0b00001000);
-	I2Cstopevent();
-	delay();
-
-	//Selecting QCIF format
-	I2Cstartevent();
-	I2Csendonebyte(0x42);
-	I2Csendonebyte(0x12);
-	I2Csendonebyte(0b00001000);
-	I2Cstopevent();
-	delay();
-
-	// SUNNY SETTINGS
-	//Turn off auto white balance
-	I2Cstartevent();
-	I2Csendonebyte(0x42);
-	I2Csendonebyte(0x13);
-	I2Csendonebyte(0xe5);
-	I2Cstopevent();
-	I2Cstartevent();
-	I2Csendonebyte(0x42);
-	I2Csendonebyte(0x01);
-	I2Csendonebyte(0x5a);
-	I2Cstopevent();
-	I2Cstartevent();
-	I2Csendonebyte(0x42);
-	I2Csendonebyte(0x02);
-	I2Csendonebyte(0x5c);
-	I2Cstopevent();
+	// // SUNNY SETTINGS
+	// //Turn off auto white balance
+	// i2c_startevent();
+	// i2c_sendonebyte(0x42);
+	// i2c_sendonebyte(0x13);
+	// i2c_sendonebyte(0xe5);
+	// i2c_stopevent();
+	// i2c_startevent();
+	// i2c_sendonebyte(0x42);
+	// i2c_sendonebyte(0x01);
+	// i2c_sendonebyte(0x5a);
+	// i2c_stopevent();
+	// i2c_startevent();
+	// i2c_sendonebyte(0x42);
+	// i2c_sendonebyte(0x02);
+	// i2c_sendonebyte(0x5c);
+	// i2c_stopevent();
 }
 
 // This is about a ms delay, used for I2C communication
 void delay() {
 	int j;
 	for (j=0; j<1000; j++) {}
+}
+
+void i2c_com(int reg_address, int default_value, int change_value){
+	delay();
+	i2c_master_start();
+	i2c_master_send(0x42);
+	i2c_master_send(reg_address); //Address for COM7
+	i2c_master_send(default_value | change_value);
+	i2c_master_stop();
+	delay();
 }
 
 
@@ -290,23 +370,31 @@ void read_image(){
 	int rows = 0; 
 	int cols = 0;
 	volatile unsigned char pixel;
+	char msg3[5];
 
-	while(rows < num_rows){
+	while(rows <= num_rows){
 		if(HREF){
+			OC1CONbits.ON = 1; // Turn on clock - so that alignment
+			// between clock and HREF will be the same for every row
+			// delay();
 			while(HREF){
-				if(RCK && cols <= num_columns){
-					pixel = (int)read_byte();
-					img_array[rows][cols] = pixel;
+				if(RCK){
+					// pixel = read_byte();
+					img_array[rows][cols] = PORTB;
 					cols++;
-					while(RCK){
-						{}; //do nothing, wait for next clock pulse
-					}
+					while(RCK){}
 				}
-				cols = 0;
-				rows++;
 			}
+			img_array[rows][0] = cols;
+			cols = 0;
+			rows++;
+			OC1CONbits.ON = 0; // Turn clock off
+			// sprintf(msg3, "%d", rows);
+			// NU32_WriteUART1(msg3);
 		}
 	}
+	// delay();
+	img_array[0][0] = rows;
 
 	FIFO_output_disable();
 	// clock_off();
@@ -332,7 +420,7 @@ void FIFO_output_disable(){
 
 void rckInitialize(){
 	T3CONbits.TCKPS = 0; // Timer 3 pre­scaler N = 1 (1:1), thus it ticks at 80 Mhz (PBCLK/N)
-	PR3 = FULL_DUTY - 1; // This makes run at 80 Mhz / (N * (PR2+1)) == 10 MHz
+	PR3 = FULL_DUTY - 1; // This makes run at 80 Mhz / (N * (PR3+1)) == 10 MHz
 	TMR3 = 0; // Set the initial timer count to 0
 	OC1CONbits.OCM = 0b110; // PWM mode without the failsafe for OC1
 	OC1CONbits.OCTSEL = 1; // use timer 3
@@ -363,19 +451,21 @@ void display_image(){
 	//Print out image
 	int j;
 	int i;
-	unsigned char pixel;
-	unsigned char msg[20];
+	volatile unsigned char pixel;
+	char msg[20];
 
-	for(j=0; j<10; j++){
-		for(i=0; i<10; i++){
+	for(j=0; j<145; j++){
+		for(i=0; i<220; i++){ //142 is highest
 			pixel = img_array[j][i];
-			sprintf(msg, "%d", pixel);
+			sprintf(msg, "%d \r\n", pixel);
+			// sprintf(msg, "%d", pixel);
 			NU32_WriteUART1(msg);
-			NU32_WriteUART1(" ");
+			// NU32_WriteUART1(" ");
 		}
-		NU32_WriteUART1("\r\n");
+		// NU32_WriteUART1("\r\n");
 	}
 }
+
 
 void wheel_one(){
 	T2CONbits.TCKPS = 4; // Timer 2 pre­scaler N = 1 (1:1), thus it ticks at 80 Mhz (PBCLK/N)
