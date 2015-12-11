@@ -89,7 +89,29 @@ while ~has_quit
                 image_array1 = [image_array1; pic_rowa]; %y component
                 image_array2 = [image_array2; pic_rowb]; %uv component
             end
-                 
+            
+            
+            image_rgb = [];
+            for row = 1:size(image_array1,1)
+                temp_row = [];
+                for col = 1:size(image_array1,2) - 4
+                    y = image_array1(row, col);
+                    if mod(col/2,2)==0                        
+                        u = image_array2(row, col-1);
+                        v = image_array2(row, col);
+                    else
+                        u = image_array2(row, col);
+                        v = image_array2(row, col+1);
+                    end
+                    
+                    r = 1.164*(y - 16) + 1.596*(v - 128);
+                    g = 1.164*(y - 16) - 0.813*(v - 128) - 0.391*(u - 128);
+                    b = 1.164*(y - 16) + 2.018*(u - 128);
+                    temp_row = [temp_row r g b];
+                end
+                image_rgb = [image_rgb; temp_row];
+            end
+                
             
             figure(1)
             surfc(image_array1)
@@ -102,7 +124,9 @@ while ~has_quit
             colormap(gray)
             view(2)
             axis equal;
- 
+            
+            figure(3)
+            image(image_rgb)
         case 'q'
           has_quit = true;              % exit matlab
         otherwise
