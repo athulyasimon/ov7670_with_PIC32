@@ -1,7 +1,7 @@
 //#define NU32_STANDALONE  // uncomment if program is standalone, not bootloaded
 #include "NU32.h"          // config bits, constants, funcs for startup and UART
 #include "LCD.h"
-//#include "i2c.h"
+#include "i2c.h"
 #include "NU32_I2C.h"
 
 #define MSG_LEN 20
@@ -11,6 +11,7 @@
 #define WRITE_ADC_ADDRESS   (0x43)
 #define PU_CTRL_ADDR  0x80
 
+#define FULL_DUTY 6 //About 10 MHz
 #define VSYNC PORTBbits.RB8
 #define HREF PORTBbits.RB10
 #define PCLK PORTBbits.RB9
@@ -59,32 +60,78 @@ void camera_reset(){
 }
 
 void camera_config(){
+	int i;
+	for(i=1;i<10000;i++){}
+	//configure the register that slows down pclk period to xclk*32
+
 	delay();
 	I2Cstartevent();
 	I2Csendonebyte(0x42);
 	I2Csendonebyte(0x11);
-	I2Csendonebyte(0b10000011);
+	I2Csendonebyte(0b10000011);// pclk is 32 times xclk period
 	I2Cstopevent();
 	delay();
 
-	// Enable scaling
+	//Enable scaling
 	I2Cstartevent();
 	I2Csendonebyte(0x42);
-	I2Csendonebyte(0x11);
+	I2Csendonebyte(0x0c);
 	I2Csendonebyte(0b00001000);
 	I2Cstopevent();
 	delay();
 
-	// Selecting QCIF format
+	//Selecting QCIF format
 	I2Cstartevent();
 	I2Csendonebyte(0x42);
 	I2Csendonebyte(0x12);
 	I2Csendonebyte(0b00001000);
 	I2Cstopevent();
-	delay();	
+	delay();
 
+	// SUNNY SETTINGS
+	//Turn off auto white balance
+	I2Cstartevent();
+	I2Csendonebyte(0x42);
+	I2Csendonebyte(0x13);
+	I2Csendonebyte(0xe5);
+	I2Cstopevent();
+	I2Cstartevent();
+	I2Csendonebyte(0x42);
+	I2Csendonebyte(0x01);
+	I2Csendonebyte(0x5a);
+	I2Cstopevent();
+	I2Cstartevent();
+	I2Csendonebyte(0x42);
+	I2Csendonebyte(0x02);
+	I2Csendonebyte(0x5c);
+	I2Cstopevent();
 }
 
+//configure PIC32 digital inputs to receive camera signals
+//this function may not be necessary; I think B pins default to digital input
+void data_config() {
+	DDPCONbits.JTAGEN = 0;
+	TRISB = 0xFFFF; //set all Port B pins to digital inputs
+	AD1PCFG = 0xFFFF;
+	TRISDbits.TRISD3 = 0;
+	LATDbits.LATD3 = 0;
+	TRISEbits.TRISE9 = 0;
+	LATEbits.LATE3 = 1;
+}
+
+//initialize PWM for camera's XCLK
+void xclkInitialize() {
+	T3CONbits.TCKPS = 0; // Timer 3 pre­scaler N = 1 (1:1), thus it ticks at 80 Mhz (PBCLK/N)
+	PR3 = FULL_DUTY - 1; // This makes run at 80 Mhz / (N * (PR2+1)) == 10 MHz
+	TMR3 = 0; // Set the initial timer count to 0
+	OC1CONbits.OCM = 0b110; // PWM mode without the failsafe for OC1
+	OC1CONbits.OCTSEL = 1; // use timer 3
+	OC1RS = FULL_DUTY/2; // Next duty duty cycle is 0
+	OC1R = FULL_DUTY/2; // Initial duty cycle of 0
+	T3CONbits.ON = 1; // Turn on timer 3
+	OC1CONbits.ON = 1; // Turn on output compare 1
+
+}
 
 /**********************************************************************
 * Interrupt(s)
@@ -158,6 +205,8 @@ int main() {
   I2Cinitialize(SLOW_BAUD_RATE); //init I2C module. SCL2 pin A2, SDA2 pin A3
   camera_reset();
   camera_config();
+  data_config(); //configure PIC32 digital inputs to receive camera signals
+
 
   __builtin_enable_interrupts();
   
