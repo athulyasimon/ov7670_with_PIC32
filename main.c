@@ -6,8 +6,8 @@
 #define MSG_LEN 20
 
 #define ADC_I2C_BAUD  9600
-#define READ_ADC_ADDRESS   (0x2A)
-#define WRITE_ADC_ADDRESS   (0x2B)
+#define READ_ADC_ADDRESS   (0x42)
+#define WRITE_ADC_ADDRESS   (0x43)
 #define PU_CTRL_ADDR  0x80
 
 
