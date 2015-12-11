@@ -51,6 +51,14 @@ while ~has_quit
             n = fscanf(mySerial,'%d');
             fprintf('Read: %d\n',n);
             fprintf('Image stored\n');
+        case 'i'
+            n = fscanf(mySerial,'%d');
+            fprintf('Read: %d\n',n);
+            fprintf('Test Pattern off\n');
+        case 'o'
+            n = fscanf(mySerial,'%d');
+            fprintf('Read: %d\n',n);
+            fprintf('Test Pattern on\n');
         case 'p'	
             close all;
 	    	pic_array = zeros(145,220);
@@ -65,6 +73,36 @@ while ~has_quit
             fid = 1;                             % Insert true ‘fid’
 			fprintf(fid, [repmat(' %d ', 1, 100) '\n'], pic_array');
             
+            image_array1 = [];
+            image_array2 = [];
+            for row=1:145
+                pic_row1 = pic_array(row, 3:2:end);
+                pic_row2 = pic_array(row, 2:2:end-1);
+                if mean(pic_row1) > mean(pic_row2)
+                    pic_rowa = pic_row2;
+                    pic_rowb = pic_row1;
+                else
+                    pic_rowb = pic_row2;
+                    pic_rowa = pic_row1;
+                end
+                  
+                image_array1 = [image_array1; pic_rowa]; %y component
+                image_array2 = [image_array2; pic_rowb]; %uv component
+            end
+                 
+            
+            figure(1)
+            surfc(image_array1)
+            colormap(gray)
+            view(2)
+            axis equal;
+
+            figure(2)
+            surfc(image_array2)
+            colormap(gray)
+            view(2)
+            axis equal;
+ 
         case 'q'
           has_quit = true;              % exit matlab
         otherwise
