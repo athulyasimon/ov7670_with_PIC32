@@ -34,7 +34,7 @@ has_quit = false;
 % menu loop
 while ~has_quit
     % display the menu options
-    fprintf('l: read one byte    k: Take a new image    p: Display image    q: Quit\n');
+    fprintf('l: read one byte    k: Take a new image    p: Display image    o: Turns on test pattern   i: Turns off test pattern    q: Quit\n');
     % read the users choice
     selection = input('Enter Command: ', 's');
      
@@ -65,13 +65,10 @@ while ~has_quit
 			for j=1:145
 				for i=1:220
  					pic_array(j,i) = fscanf(mySerial,'%d');
-%                     if pic_array(j,i) == 255
-%                         pic_array(j,i) = 0;
-%                     end
 				end
 			end
             fid = 1;                             % Insert true ‘fid’
-			fprintf(fid, [repmat(' %d ', 1, 100) '\n'], pic_array');
+			fprintf(fid, [repmat(' %d ', 1, 100) '\n'], pic_array'); %formats nicely
             
             image_array1 = [];
             image_array2 = [];
@@ -93,7 +90,7 @@ while ~has_quit
             
             image_rgb = [];
             for row = 1:size(image_array1,1)
-                temp_row = [];
+                pixel_num = 1;
                 for col = 1:size(image_array1,2) - 4
                     y = image_array1(row, col);
                     if mod(col/2,2)==0                        
@@ -104,12 +101,22 @@ while ~has_quit
                         v = image_array2(row, col+1);
                     end
                     
-                    r = 1.164*(y - 16) + 1.596*(v - 128);
-                    g = 1.164*(y - 16) - 0.813*(v - 128) - 0.391*(u - 128);
-                    b = 1.164*(y - 16) + 2.018*(u - 128);
-                    temp_row = [temp_row r g b];
+                    %r = 1.164*(y - 16) + 1.596*(v - 128);
+                    %g = 1.164*(y - 16) - 0.813*(v - 128) - 0.391*(u - 128);
+                    %b = 1.164*(y - 16) + 2.018*(u - 128);
+                    %temp_row = [temp_row r g b];
+
+		    %color conversion from http://www.equasys.de/colorconversion.html
+                    rgb2yuv_mat = [1.164 0 1.596; 1.164 -.392 -.813;1.164 2.017 0];
+                    rgb = rgb2yuv_mat*[y-16;u-128;v-128];
+                    
+                    
+                    image_rgb(row,pixel_num, 1) = rgb(1);
+                    image_rgb(row,pixel_num, 2) = rgb(2);
+                    image_rgb(row,pixel_num, 3) = rgb(3);
+                    pixel_num = pixel_num + 1;
                 end
-                image_rgb = [image_rgb; temp_row];
+               % image_rgb = [image_rgb; temp_row];
             end
                 
             
@@ -127,6 +134,8 @@ while ~has_quit
             
             figure(3)
             image(image_rgb)
+	    axis equal;
+
         case 'q'
           has_quit = true;              % exit matlab
         otherwise
