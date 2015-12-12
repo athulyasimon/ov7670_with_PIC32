@@ -12,6 +12,8 @@
 
 #define HREF PORTBbits.RB10
 #define RCK PORTBbits.RB9 
+#define RST PORTAbits.RA1
+
 
 //SIOC - A2 (SCL2) or A14 (SCL1) 
 //SIOD - A3 (SDA2) or A15 (SDA1) 
@@ -252,34 +254,16 @@ void camera_config(){
 	for(i=1;i<10000;i++){}
 	//configure the register that slows down pclk period to xclk*32
 
-	//configure the register that slows down pclk period to xclk*32
-	// delay();
-	// i2c_master_start();
-	// i2c_master_send(0x42);
-	// i2c_master_send(0x11);
-	// i2c_master_send(0b10000011);// pclk is 32 times xclk period
-	// i2c_master_stop();
-	// delay();
 
-	//Enable scaling (COM3)
-	// i2c_com(0x0c, 0x00, 0b00001000); 
-	// i2c_master_start();
-	// i2c_master_send(0x42);
-	// i2c_master_send(0x0c); //Address for COM3
-	// i2c_master_send(0x00 | 0b00001000); //Default and bit 3 is scale enable
-	// i2c_master_stop();
-	// delay();
+	Enable scaling (COM3)
+	i2c_com(0x0c, 0x00, 0b00001000); 
 
-	//Selecting QCIF format (COM7)
-	// i2c_com(0x12, 0x00, 0b00001000);
-	// i2c_master_start();
-	// i2c_master_send(0x42);
-	// i2c_master_send(0x12); //Address for COM7
-	// i2c_master_send(0x00 | 0b00001000);
-	// i2c_master_stop();
-	// delay();
+
+	// Selecting QCIF format (COM7)
+	i2c_com(0x12, 0x00, 0b00001000);
+
 		//Selecting QCIF format (COM14)
-	// i2c_com(0x3e, 0x0e, 0b00001000);
+	i2c_com(0x3e, 0x0e, 0b00001000);
 
 	// //Test pattern
 	i2c_master_start();
@@ -295,23 +279,6 @@ void camera_config(){
 	i2c_master_stop();
 	delay();
 
-	// // SUNNY SETTINGS
-	// //Turn off auto white balance
-	// i2c_startevent();
-	// i2c_sendonebyte(0x42);
-	// i2c_sendonebyte(0x13);
-	// i2c_sendonebyte(0xe5);
-	// i2c_stopevent();
-	// i2c_startevent();
-	// i2c_sendonebyte(0x42);
-	// i2c_sendonebyte(0x01);
-	// i2c_sendonebyte(0x5a);
-	// i2c_stopevent();
-	// i2c_startevent();
-	// i2c_sendonebyte(0x42);
-	// i2c_sendonebyte(0x02);
-	// i2c_sendonebyte(0x5c);
-	// i2c_stopevent();
 }
 
 // This is about a ms delay, used for I2C communication
