@@ -255,7 +255,7 @@ void camera_config(){
 	//configure the register that slows down pclk period to xclk*32
 
 
-	Enable scaling (COM3)
+	// Enable scaling (COM3)
 	i2c_com(0x0c, 0x00, 0b00001000); 
 
 
@@ -290,7 +290,7 @@ void i2c_com(int reg_address, int default_value, int change_value){
 	delay();
 	i2c_master_start();
 	i2c_master_send(0x42);
-	i2c_master_send(reg_address); //Address for COM7
+	i2c_master_send(reg_address); 
 	i2c_master_send(default_value | change_value);
 	i2c_master_stop();
 	delay();
@@ -340,7 +340,7 @@ void read_image(){
 
 	while(rows <= num_rows){
 		if(HREF){
-			OC1CONbits.ON = 1; // Turn on clock - so that alignment
+			// OC1CONbits.ON = 1; // Turn on clock - so that alignment
 			// between clock and HREF will be the same for every row
 			// delay();
 			while(HREF){
@@ -354,7 +354,7 @@ void read_image(){
 			img_array[rows][0] = cols;
 			cols = 0;
 			rows++;
-			OC1CONbits.ON = 0; // Turn clock off
+			// OC1CONbits.ON = 0; // Turn clock off
 			// sprintf(msg3, "%d", rows);
 			// NU32_WriteUART1(msg3);
 		}
@@ -420,15 +420,15 @@ void display_image(){
 	volatile unsigned char pixel;
 	char msg[20];
 
-	for(j=0; j<145; j++){
-		for(i=0; i<220; i++){ //142 is highest
+	for(j=0; j<14; j++){
+		for(i=0; i<10; i++){ //142 is highest
 			pixel = img_array[j][i];
-			sprintf(msg, "%d \r\n", pixel);
-			// sprintf(msg, "%d", pixel);
+			// sprintf(msg, "%d \r\n", pixel);
+			sprintf(msg, "%d", pixel);
 			NU32_WriteUART1(msg);
-			// NU32_WriteUART1(" ");
+			NU32_WriteUART1(" ");
 		}
-		// NU32_WriteUART1("\r\n");
+		NU32_WriteUART1("\r\n");
 	}
 }
 
