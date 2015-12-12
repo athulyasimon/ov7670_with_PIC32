@@ -278,7 +278,6 @@ void camera_config(){
 	i2c_master_send(0x35 | 0b10000000);
 	i2c_master_stop();
 	delay();
-
 }
 
 // This is about a ms delay, used for I2C communication
