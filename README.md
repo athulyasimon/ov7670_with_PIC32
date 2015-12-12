@@ -4,5 +4,5 @@ The goal of this project was interface the OV7670 camera with the PIC32MX595F512
 
 The pin Connections between the PIC32 and the camera can be seen below
 
-![Pin connections](image link)
+![Pin connections](https://raw.githubusercontent.com/athulyasimon/project_portfolio/gh-pages/public/images/ov7670_project/pin%20connections.jpg)
 
